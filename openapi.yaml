@@ -1,0 +1,2190 @@
+openapi: 3.0.1
+
+references:
+  page_query_param: &page_query_param
+    in: query
+    name: page
+    schema:
+      type: integer
+    required: false
+    description: Page number, starts at 1. Increment to paginate through results (until result is empty array)
+  fields_query_param: &fields_query_param
+    in: query
+    name: fields
+    schema:
+      type: string
+    required: false
+    description: pare down the returned fields (comma `,` separated, drill down with a slash `/`)
+  as_markdown_query_param: &as_markdown_query_param
+    in: query
+    name: as-markdown
+    schema:
+      type: bool
+    required: false
+    description: formatting (other than HTML links) is hidden. Use this query param to return content with markdown syntax
+  assetKey_path_param: &assetKey_path_param
+    in: path
+    name: assetKey
+    required: true
+    schema:
+      type: string
+    description: This "key" can be the asset's ID (unique), slug (unique), or symbol (non-unique). We strongly recommend using ID or slug, as some relatively common symbols may produce unexpected results. In general, the oldest asset with a given symbol will be returned when symbol is used.
+  marketKey_path_param: &marketKey_path_param
+    in: path
+    name: marketKey
+    required: true
+    schema:
+      type: string
+    description: This key can be the market's ID (unique), or a string in the form of exchangeSlug-baseAssetSymbol-quoteAssetSymbol
+    example: binance-btc-usdt
+  metricID_path_param: &metricID_path_param
+    in: path
+    name: metricID
+    required: true
+    schema:
+      type: string
+    description: The metricID is a unique identifier which determines which columns are returned by time-series endpoints. For a list of valid metric ids, check the API response at https://data.messari.io/api/v1/assets/metrics.
+    example: price
+  format_query_param: &format_query_param
+    in: query
+    name: format
+    required: false
+    schema:
+      type: string
+      enum: [csv, json]
+    description: Specify format = csv to download data as CSV.
+  timestamp_format_query_param: &timestamp_format_query_param
+    in: query
+    name: timestamp-format
+    required: false
+    schema:
+      type: string
+      enum: [unix-millisecond, unix-second, rfc3339]
+    description: Specify timestamp-format=rfc3339 for timestamps in the format "2016-11-01T20:44:39Z"
+  order_query_param: &order_query_param
+    in: query
+    name: order
+    required: false
+    schema:
+      type: string
+      enum: [asc, desc]
+    description: Order controls whether points in the response are returned in ascending or descending order.
+  start_query_param: &start_query_param
+    in: query
+    name: start
+    required: false
+    schema:
+      type: string
+      format: date-time
+    description: The "start" query parameter can be used to set the date that points are returned after.
+    example: 2020-01-01T01:00:00.000Z
+  end_query_param: &end_query_param
+    in: query
+    name: end
+    required: false
+    schema:
+      type: string
+      format: date-time
+    description: The "end" query parameter can be used to set the date after which no more points will be returned.
+  interval_query_param: &interval_query_param
+    in: query
+    name: interval
+    required: false
+    schema:
+      type: string
+      enum: [1m, 5m, 15m, 30m, 1h, 1d, 1w]
+    description: Defines what interval the resulting points will be returned in.
+  columns_query_param: &columns_query_param
+    in: query
+    name: columns
+    required: false
+    schema:
+      type: string
+    description: A comma separated list of strings that controls which columns will be returned and in what order.
+    example: open,close
+  asset: &asset
+    id:
+      type: string
+      description: Asset ID. Unique and will never change.
+      example: 1e31218a-e44e-4285-820c-8282ee222035
+    symbol:
+      type: string
+      description: The commonly accepted "symbol" for an asset. Not unique, and can change.
+      example: BTC
+    name:
+      type: string
+      description: Name of asset
+      example: Bitcoin
+    slug:
+      type: string
+      description: Web URL friendly shorthand slug, alternative to ID. Unique, but can change.
+      example: bitcoin
+  error_responses: &error_responses
+    400:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus400"
+    401:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus401"
+    403:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus403"
+    429:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus429"
+    500:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus500"
+  error_responses_with_404: &error_responses_with_404
+    <<: *error_responses
+    404:
+      description: NotFound
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpStatus404"
+
+info:
+  title: |-
+    Messari's Crypto Data API
+  description: |-
+    <div style="margin: 20px 0 15px 0">
+      <img src="https://data.messari.io/docs/logo_messari_black_horizontal.svg" alt="Messari Logo" />
+    </div>
+
+    Messari provides a free API for crypto prices, market data metrics, on-chain metrics, and qualitative information (asset profile).
+
+    This is the same API that powers the https://messari.io/ web app.
+
+    <hr />
+
+    The Messari API does not include redistribution rights. Email us at support@messari.io if you're planning to re-sell Messari data.
+
+    Websites using Messari data to display or share with third parties must receive a separate license from Messari. Please email support@messari.io for more information.
+
+    Asset profiles are free to use with attribution and link to http://messari.io as per our [terms of service](https://messari.s3.amazonaws.com/termsofuse.html).
+
+    Without an API key, requests are rate limited to 20 requests per minute and 1000 requests per day. Users that create an account will have slightly higher limits of 30 requests per minute and 2000 requests per day. PRO users have the highest limit at 60 requests per minute up to a maximum of 4000 requests per day. Contact us at support@messari.io if you need a higher limit.
+
+    Sign up for an account at https://messari.io/ and navigate to https://messari.io/account/api to get an API key. Send the token as the `x-messari-api-key` HTTP header on all your API requests. **We cannot help you debug code**, but you'll know if this works if you see your most recent API requests show up here: https://messari.io/account/api
+
+    ```
+    // This is node.js example code for making requests with an API key using the stdlib.
+    require("https")
+      .request(
+        {
+          host: "data.messari.io",
+          path: "/api/v1/assets/btc",
+          // replace YOUR-SECRET-KEY with your actual key
+          // from https://messari.io/account/api (create messari account first)
+          headers: { "x-messari-api-key": "YOUR-SECRET-KEY" },
+        },
+        function (response) {
+          let str = "";
+          response.on("data", (chunk) => (str += chunk));
+          response.on("end", () => console.log(JSON.parse(str)));
+        }
+      )
+      .end();
+    ```
+
+    Important: treat your API key like you would a password, do not share with anyone, do not email to anyone, including Messari. Likewise, do not use your API key from a public JavaScript/HTML app (this would reveal it to any visitor) - in this scenario, you'd create your own HTTP proxy that would automatically add an API key to any requests made from your app. If your API key is leaked or compromised, you can generate a new one at https://messari.io/account/api
+
+    **This API is self-service, there is no support at this time.**
+
+    ### API Server URL
+
+    The base URL is: `https://data.messari.io/api`, and the endpoints are versioned (v1, v2, etc.) whenever a breaking change is introduced.
+
+    ### Errors
+
+    The Messari API uses standard HTTP status codes to indicate success or failure.
+
+    * 200 represents success
+    * 4xx represents a user error (such as a problem with your key)
+    * and 5xx represents a problem with our API.
+    * There will also be a corresponding JSON payload with a data.error_message field
+
+    ### JavaScript Examples
+
+    #### Write current price to a HTML div
+
+    ```javascript
+    // assuming you have a <div id='current-btc-price' style='font-weight: bold; font-size: 18px;'></div>
+    window
+      .fetch("https://data.messari.io/api/v1/assets/btc/metrics/market-data")
+      .then(res => res.json())
+      .then(messariRes => messariRes.data)
+      .then(
+        payload =>
+          (document.getElementById("current-btc-price").innerHTML =
+            '$' + payload.market_data.price_usd.toLocaleString())
+      );
+    ```
+
+    #### Write current reported marketcap to a HTML div
+
+    ```javascript
+    // assuming you have a <div id='current-btc-marketcap' style='font-weight: bold; font-size: 18px;'></div>
+    window
+      .fetch("https://data.messari.io/api/v1/assets/btc/metrics")
+      .then(res => res.json())
+      .then(messariRes => messariRes.data)
+      .then(
+        payload =>
+          (document.getElementById("current-btc-marketcap").innerHTML =
+            '$' + payload.marketcap.current_marketcap_usd.toLocaleString())
+      );
+    ```
+
+  termsOfService: https://messari.s3.amazonaws.com/termsofuse.html
+  contact:
+    email: support@messari.io
+  version: 1.0.0
+"x-tagGroups":
+  - name: REST API
+    tags:
+      - Assets
+      - Markets
+      - Timeseries
+tags:
+  - name: "HTTP REST API"
+    description: |-
+      an HTTP REST API in JSON, all responses will be gzipped (`content-encoding: gzip`)
+servers:
+  - url: https://data.messari.io
+    description: API Server
+paths:
+  /api/v1/markets:
+    get:
+      tags: ["Markets"]
+      operationId: Get all Markets
+      description: Get the list of all exchanges and pairs that our WebSocket-based market real-time market data API supports.
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/markets
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/markets")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/markets"
+            print(urllib.request.urlopen(url).read())
+      parameters:
+        - *page_query_param
+        - *fields_query_param
+      responses:
+        <<: *error_responses
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetAllMarketsResponse"
+
+  /api/v1/assets:
+    get:
+      tags: ["Assets"]
+      operationId: Get all Assets
+      deprecated: true
+      parameters:
+        - *page_query_param
+        - in: query
+          name: sort
+          schema:
+            type: string
+          required: false
+          description: default sort is "marketcap desc", but the only valid value for this query param is "id" which translates to "id asc", which is useful for a stable sort while paginating
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+          description: default is 20, max is 500
+        - *fields_query_param
+        - in: query
+          name: with-metrics
+          required: false
+          description: existence of this query param filters assets to those with quantitative data
+        - in: query
+          name: with-profiles
+          required: false
+          description: existence of this query param filters assets to those with qualitative data
+      description: |
+        Get the paginated list of all assets *and* their metrics and profiles.
+
+        Some example query param usage:
+
+        * optionally use `?fields` query param to pare down the returned fields (because this endpoint returns a lot of data)
+          * [`data.messari.io/api/v1/assets?fields=id,slug,symbol,metrics/market_data/price_usd`](https://data.messari.io/api/v1/assets?fields=id,slug,symbol,metrics/market_data/price_usd)
+        * optionally use `?with-metrics` or `?with-profiles` query parameters to filter the list
+          * [`data.messari.io/api/v1/assets?with-metrics`](https://data.messari.io/api/v1/assets?with-metrics)
+          * [`data.messari.io/api/v1/assets?with-profiles`](https://data.messari.io/api/v1/assets?with-profiles)
+          * [`data.messari.io/api/v1/assets?with-metrics&with-profiles`](https://data.messari.io/api/v1/assets?with-metrics&with-profiles)
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets
+            curl --compressed https://data.messari.io/api/v1/assets?with-metrics
+            curl --compressed https://data.messari.io/api/v1/assets?with-profiles
+            curl --compressed https://data.messari.io/api/v1/assets?with-metrics&with-profiles
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/assets"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetAllAssetsResponse"
+  /api/v2/assets:
+    get:
+      tags: ["Assets"]
+      operationId: Get all Assets V2
+      parameters:
+        - *page_query_param
+        - in: query
+          name: sort
+          schema:
+            type: string
+          required: false
+          description: default sort is "marketcap desc", but the only valid value for this query param is "id" which translates to "id asc", which is useful for a stable sort while paginating
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          required: false
+          description: default is 20, max is 500
+        - *fields_query_param
+        - in: query
+          name: with-metrics
+          required: false
+          description: existence of this query param filters assets to those with quantitative data
+        - in: query
+          name: with-profiles
+          required: false
+          description: existence of this query param filters assets to those with qualitative data
+      description: |
+        Get the paginated list of all assets *and* their metrics and profiles.
+
+        Some example query param usage:
+
+        * optionally use `?fields` query param to pare down the returned fields (because this endpoint returns a lot of data)
+          * [`data.messari.io/api/v2/assets?fields=id,slug,symbol,metrics/market_data/price_usd`](https://data.messari.io/api/v2/assets?fields=id,slug,symbol,metrics/market_data/price_usd)
+        * optionally use `?with-metrics` or `?with-profiles` query parameters to filter the list
+          * [`data.messari.io/api/v2/assets?with-metrics`](https://data.messari.io/api/v2/assets?with-metrics)
+          * [`data.messari.io/api/v2/assets?with-profiles`](https://data.messari.io/api/v2/assets?with-profiles)
+          * [`data.messari.io/api/v2/assets?with-metrics&with-profiles`](https://data.messari.io/api/v2/assets?with-metrics&with-profiles)
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v2/assets
+            curl --compressed https://data.messari.io/api/v2/assets?with-metrics
+            curl --compressed https://data.messari.io/api/v2/assets?with-profiles
+            curl --compressed https://data.messari.io/api/v2/assets?with-metrics&with-profiles
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v2/assets")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v2/assets"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetAllAssetsV2Response"
+  "/api/v1/assets/{assetKey}":
+    get:
+      tags: ["Assets"]
+      operationId: Get Asset
+      description: Get basic metadata for an asset.
+      parameters:
+        - *assetKey_path_param
+        - *fields_query_param
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/btc
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets/btc")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/assets/btc"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses_with_404
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+  "/api/v1/assets/{assetKey}/profile":
+    get:
+      tags: ["Assets"]
+      operationId: Get Asset Profile V1
+      deprecated: true
+      description: Get all of our qualitative information for an asset.
+      parameters:
+        - *assetKey_path_param
+        - *fields_query_param
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/btc/profile
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets/btc/profile")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/assets/btc/profile"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses_with_404
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetProfileResponse"
+  "/api/v2/assets/{assetKey}/profile":
+    get:
+      tags: ["Assets"]
+      operationId: Get Asset Profile V2
+      description: |
+        Get all of our qualitative information for an asset.
+
+        Some example query param usage:
+
+        * optionally use `?fields` query param to pare down the returned fields
+          * [`data.messari.io/api/v2/assets/eth/profile?fields=id,name,profile/general/overview/is_verified`](https://data.messari.io/api/v2/assets/eth/profile?fields=id,name,profile/general/overview/is_verified)
+        * optionally use `?as-markdown` query param to get content in markdown format
+          * [`data.messari.io/api/v2/assets/btc/profile?as-markdown`](https://data.messari.io/api/v2/assets/btc/profile?as-markdown)
+      parameters:
+        - *assetKey_path_param
+        - *fields_query_param
+        - *as_markdown_query_param
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v2/assets/btc/profile
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v2/assets/btc/profile")
+              .json()
+              .then(response => {
+                console.log(response);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v2/assets/btc/profile"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses_with_404
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetProfileV2Response"
+  "/api/v1/assets/{assetKey}/metrics":
+    get:
+      tags: ["Assets"]
+      operationId: Get Asset Metrics
+      description: Get all of our quantitative metrics for an asset.
+      parameters:
+        - *assetKey_path_param
+        - *fields_query_param
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/btc/metrics
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets/btc/metrics")
+              .then(response => {
+                console.log(response.body);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/assets/btc/metrics"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses_with_404
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetMetricsResponse"
+  "/api/v1/assets/{assetKey}/metrics/market-data":
+    get:
+      tags: ["Assets"]
+      operationId: Get Asset Market Data
+      description: Get the latest market data for an asset. This data is also included in the metrics endpoint, but if all you need is market-data, use this.
+      parameters:
+        - *assetKey_path_param
+        - *fields_query_param
+
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/btc/metrics/market-data
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets/btc/metrics/market-data")
+              .then(response => {
+                console.log(response.body);
+              });
+        - lang: Python
+          source: |
+            from six.moves import urllib
+            url = "https://data.messari.io/api/v1/assets/btc/metrics/market-data"
+            print(urllib.request.urlopen(url).read())
+      responses:
+        <<: *error_responses_with_404
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetMetricsMarketDataResponse"
+  "/api/v1/assets/metrics":
+    get:
+      tags: ["Assets", "Timeseries"]
+      operationId: List asset timeseries metric IDs
+      description: |
+        Lists all of the available timeseries metric IDs for assets.
+      parameters:
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/metrics
+        - lang: JavaScript
+          source: |
+            // npm i got
+            require("got")
+              .get("https://data.messari.io/api/v1/assets/metrics")
+              .then(response => {
+                console.log(response.body);
+              });
+      responses:
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAssetMetricsResponse"
+  "/api/v1/assets/{assetKey}/metrics/{metricID}/time-series":
+    get:
+      tags: ["Assets", "Timeseries"]
+      operationId: Get Asset timeseries
+      description: |
+        Retrieve historical timeseries data for an asset.
+
+        metricID specifies which timeseries will be returned. The list of supported metric ids can be found at https://data.messari.io/api/v1/assets/metrics.
+
+        You can specify the range of what points will be returned using (begin, end, start, before, after) query parameters. All range parameters are inclusive of the specified date.
+
+        Some examples:
+        * Return data between 2019-01-01 to 2019-01-07: "?start=2020-01-01&end=2020-01-07"
+        * Return data after 2020-01-01: "?after=2020-01-01"
+        * Return data before 2020-01-01: "?before=2020"
+
+        You can specify the interval that the points will be returned in using the "interval" query parameter. Supported intervals are ["5m", "15m", "30m", "1h", "1d", "1w"] for 5 minute, 15 minute, 30 minute. 1 hour, 1 day, and 1 week respectively. **Anything under 1 day requires an enterprise subscription, please email enterprise@messari.io.**
+
+        A default start date, end date, and/or interval will be provided for you if not specified.
+
+        For any given interval, at most 2016 points will be returned. For example, with interval=5m, the maximum range of the request is 2016 * 5 minutes = 7 days. With interval=1h, the maximum range is 2016 * 1 hour = 84 days. Exceeding the maximum range will result in an error, which can be solved by reducing the date range specified in the request.
+
+        You can specify the sort order of data points in the response using the ?order query parameter. Supported values are "asc" and "desc".
+
+        You can specify the format of the response using the "format" query parameter. Supported formats are "json" and "csv"
+      parameters:
+        - *assetKey_path_param
+        - *metricID_path_param
+        - *start_query_param
+        - *end_query_param
+        - *interval_query_param
+        - *columns_query_param
+        - *order_query_param
+        - *format_query_param
+        - *timestamp_format_query_param
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/bitcoin/metrics/price/time-series?start=2020-01-01&end=2020-02-01&interval=1d
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/assets/ethereum/metrics/sply-circ/time-series?timestamp-format=rfc3339&start=2019-01-01&end=2020-04-01
+    responses:
+      <<: *error_responses_with_404
+      200:
+        description: Successful
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetAssetTimeseriesResponse"
+  "/api/v1/markets/{marketKey}/metrics/{metricID}/time-series":
+    get:
+      tags: ["Markets", "Timeseries"]
+      operationId: Get Market timeseries
+      description: |
+        Retrieve historical timeseries data for a market.
+
+        metricID specifies which timeseries will be returned. Supported metric IDs are "price", "price-usd", and "real-vol".
+
+        You can specify the range of what points will be returned using (begin, end, start, before, after) query parameters. All range parameters are inclusive of the specified date.
+
+        Some examples:
+        * Return data between 2019-01-01 to 2019-01-07: "?start=2020-01-01&end=2020-01-07"
+        * Return data after 2020-01-01: "?after=2020-01-01"
+        * Return data before 2020-01-01: "?before=2020"
+
+        You can specify the interval that the points will be returned in using the "interval" query parameter. Supported intervals are ["5m", "15m", "30m", "1h", "1d", "1w"] for 5 minute, 15 minute, 30 minute. 1 hour, 1 day, and 1 week respectively. **Anything under 1 day requires an enterprise subscription, please email enterprise@messari.io.**
+
+        A default start date, end date, and/or interval will be provided for you if not specified.
+
+        For any given interval, at most 2016 points will be returned. For example, with interval=5m, the maximum range of the request is 2016 * 5 minutes = 7 days. With interval=1h, the maximum range is 2016 * 1 hour = 84 days. Exceeding the maximum range will result in an error, which can be solved by reducing the date range specified in the request.
+
+        You can specify the columns returned in the response using the "columns" query parameter. Columns will be returned in the order specified. The first column is timestamp and it cannot be reordered. By default, all columns will be returned.
+
+        Some examples:
+        * Return "timestamp", "open", and "close" columns only: "?columns=open,close"
+        * Return "timestamp" and "volume" column only: "?columns=volume"
+
+        You can specify the sort order of data points in the response using the ?order query parameter. Supported values are "asc" and "desc".
+
+        You can specify the format of the response using the "format" query parameter. Supported formats are "json" and "csv"
+
+      parameters:
+        - *marketKey_path_param
+        - *metricID_path_param
+        - *start_query_param
+        - *end_query_param
+        - *interval_query_param
+        - *columns_query_param
+        - *order_query_param
+        - *format_query_param
+        - *timestamp_format_query_param
+      "x-code-samples":
+        - lang: shell
+          source: |
+            curl --compressed https://data.messari.io/api/v1/markets/binance-btc-usdt/metrics/price/time-series?start=2020-01-01&end=2020-02-01&interval=1d
+    responses:
+      <<: *error_responses_with_404
+      200:
+        description: Successful
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetMarketTimeseriesResponse"
+components:
+  schemas:
+    HttpStatus400:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code generated or 400 if default.
+          example: 400
+          default: 400
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: invalid param value for field id
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    HttpStatus401:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code generated or 401 if default.
+          example: 401
+          default: 401
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: unauthorized (authentication)
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    HttpStatus403:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code generated or 403 if default.
+          example: 403
+          default: 403
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: forbidden (authorization)
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    HttpStatus404:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code generated or 404 if default.
+          example: 404
+          default: 404
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: not found
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    HttpStatus429:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code generated or 429 if default.
+          example: 429
+          default: 429
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: rate limited
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    HttpStatus500:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: Current ISO 8601 timestamp on the server.
+          example: 2018-06-02T22:51:28.209Z
+        error_code:
+          type: integer
+          description: Internal error code matches HTTP Status code of 500.
+          example: 500
+          default: 500
+        error_message:
+          type: string
+          description: a corresponding error message for the code
+          example: An internal server error occurred
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+    ApiStatus:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date
+          description: "Current timestamp (ISO 8601) on the server."
+          example: "2018-06-02T22:51:28.209Z"
+        elapsed:
+          type: integer
+          description: Number of milliseconds taken to generate this response
+          example: 10
+      required:
+        - timestamp
+        - error_code
+        - error_message
+        - elapsted
+        - credit_count
+    GetAllMarketsResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Market"
+    Market:
+      type: object
+      properties:
+        id:
+          type: string
+          example: f73edd6b-d46c-4b42-b874-9d338b832707
+          description: Market ID. Unique and will never change.
+        exchange_id:
+          type: string
+          example: 181f44f6-f9b7-4c11-9e44-7c7f803d808e
+          description: Exchange ID
+        base_asset_id:
+          type: string
+          example: 1e31218a-e44e-4285-820c-8282ee222035
+          description: Base Asset ID
+        quote_asset_id:
+          type: string
+          example: 60dcd17b-00f3-49f8-907c-f390c2521c59
+          description: Quote Asset ID
+        class:
+          type: string
+          example: spot
+          description: Type of market (spot, future, etc.)
+        excluded_from_price:
+          type: boolean
+          example: false
+          description: Whether this market is excluded from Messari's VWAP methodology
+        exchange_name:
+          type: string
+          example: Coinbase
+          description: Name of the exhange
+        exchange_slug:
+          type: string
+          example: coinbase
+          description: Exchange slug
+        base_asset_symbol:
+          type: string
+          example: BTC
+          description: Base asset symbol
+        quote_asset_symbol:
+          type: string
+          example: USD
+          description: Quote asset symbol
+        pair:
+          type: string
+          example: BTC-USD
+          description: Concatenation of base asset and quote asset symbols
+        price_usd:
+          type: number
+          format: double
+          description: Market price in USD
+          example: 7184.79746667989
+        volume_last_24_hours:
+          type: number
+          format: double
+          description: 24h trading volume in USD
+          example: 3686422132.4061913
+        deviation_from_vwap_percent:
+          type: number
+          format: double
+          description: deviation from asset VWAP (volume weighted average price)
+          example: 0.0628331306302777
+        last_trade_at:
+          type: string
+          format: date-time
+          example: 2020-01-07T00:22:26.992Z
+          description: The exact datetime of the last trade for this market
+    GetAllAssetsResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetWithMetricsAndProfile"
+    GetAllAssetsV2Response:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetWithMetricsAndProfileV2"
+    Asset:
+      type: object
+      properties:
+        <<: *asset
+    AssetResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/Asset"
+    AssetProfileResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/AssetProfile"
+    AssetProfileV2Response:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/AssetProfileV2"
+    AssetMetricsResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/AssetMetrics"
+    AssetMetricsMarketDataResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/AssetMetricsMarketData"
+    BlockchainMetricsResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          $ref: "#/components/schemas/BlockchainStats"
+    MarketData:
+      type: object
+      properties:
+        price_usd:
+          type: number
+          format: double
+          description: Market price in USD
+          example: 7184.79746667989
+        price_btc:
+          type: number
+          format: double
+          description: Market price in BTC
+          example: 1
+        volume_last_24_hours:
+          type: number
+          format: double
+          description: 24h trading volume in USD
+          example: 3686422132.4061913
+        real_volume_last_24_hours:
+          type: number
+          format: double
+          description: |
+            24h "real" trading volume in USD, read more here: https://messari.io/article/messari-methodology
+          example: 213007404.88224277
+        volume_last_24_hours_overstatement_multiple:
+          type: number
+          format: double
+          description: 24h trading volume in USD
+          example: 17.23897417186806
+        percent_change_usd_last_24_hours:
+          format: double
+          description: 24h percent change of USD-denominated price. If the return value is 1.23, it means 1.23%.
+          example: 0.7429609262723845
+        percent_change_btc_last_24_hours:
+          format: double
+          description: 24h percent change of BTC-denominated price. If the return value is 1.23, it means 1.23%.
+          example: 0
+        ohlcv_last_1_hour:
+          properties:
+            open:
+              type: number
+              format: double
+              description: Opening price this hour
+              example: 7197.467535968304
+            high:
+              type: number
+              format: double
+              description: Highest price this hour
+              example: 7208.544343587009
+            low:
+              type: number
+              format: double
+              description: Lowest price this hour
+              example: 7179.140622464517
+            close:
+              type: number
+              format: double
+              description: Latest price (same as price_usd in parent object)
+              example: 7184.797466679892
+            volume:
+              type: number
+              format: double
+              description: |
+                "Real" volume this hour, read more here: https://messari.io/article/messari-methodology
+              example: 9690910.565409226
+        ohlcv_last_24_hour:
+          properties:
+            open:
+              type: number
+              format: double
+              description: Opening price 24 hours ago
+              example: 7197.467535968304
+            high:
+              type: number
+              format: double
+              description: Highest price in past 24 hours
+              example: 7208.544343587009
+            low:
+              type: number
+              format: double
+              description: Lowest price in past 24 hours
+              example: 7179.140622464517
+            close:
+              type: number
+              format: double
+              description: Latest price (same as price_usd in parent object)
+              example: 7184.797466679892
+            volume:
+              type: number
+              format: double
+              description: |
+                "Real" volume past 24 hours, read more here: https://messari.io/article/messari-methodology
+              example: 9690910.565409226
+    AssetSupply:
+      type: object
+      properties:
+        y_2050:
+          type: number
+          format: double
+          description: The expected supply on Jan 1 2050
+          example: 20983495.3984375
+        y_2050_percent_issued:
+          type: number
+          format: double
+          description: The percentage of the Y2050 supply which has already been issued.
+          example: 20
+        supply_yplus_10:
+          type: number
+          format: double
+          description: The expected supply 10 years from now
+          example: 8932344.3984375
+        y_plus10_issued_percent:
+          type: number
+          format: double
+          description: Tthe percent of the Y+10 supply that's currently liquid on the market today.
+          example: 40
+        liquid:
+          type: number
+          format: double
+          description: Liquid Supply refers to tokens that exist on-chain, and which are not known to be encumbered by any contracts (programmatic or legal). Data is sourced by the Messari research team where available.
+          example: 1982345
+        circulating:
+          type: number
+          format: double
+          description: Circulating Supply refers to tokens that exist on-chain, and which are not known to be encumbered by any contracts (programmatic or legal).
+          example: 17394725
+        stock_to_flow:
+          type: number
+          format: double
+          description: Stock to Flow is calculated by taking the Liquid Supply today and dividing by the projected 12month increase in Liquid Supply. This is essentially the inverse of Current Inflation. The value is null for assets with fixed or decreasing Liquid Supply
+
+    AssetAllTimeHigh:
+      type: object
+      properties:
+        price:
+          type: number
+          format: decimal
+          description: The highest hourly open of the asset in USD
+          example: 20089
+        at:
+          type: string
+          format: timestamp
+          description: ISO8601 timestamp of the date which the asset reached its all time high.
+          example: 2018-06-02T22:51:28.209Z
+        days_since:
+          type: integer
+          description: Days since the asset's recorded all time high
+          example: 344
+        percent_down:
+          type: number
+          format: decimal
+          description: Percent that the current
+          example: 81.47285775644839
+    AssetDeveloperActivity:
+      type: object
+      properties:
+        stars:
+          type: integer
+          nullable: true
+          example: 34996
+        watchers:
+          type: integer
+          nullable: true
+          example: 3513
+        commits_last_3_months:
+          type: integer
+          format: int64
+          example: 342
+        commits_last_1_year:
+          type: integer
+          format: int64
+          example: 1775
+        lines_added_last_3_months:
+          type: integer
+          format: int64
+          example: 14742
+        lines_added_last_1_year:
+          type: integer
+          format: int64
+          example: 117176
+        lines_deleted_last_3_months:
+          type: integer
+          format: int64
+          example: 11106
+        lines_deleted_last_1_year:
+          type: integer
+          format: int64
+          example: 73395
+    BlockchainStats24h:
+      type: object
+      properties:
+        transaction_volume:
+          type: double
+          example: 2926664361.96
+        nvt:
+          type: double
+          example: 14.714094934462347
+        sum_of_fees:
+          type: double
+          example: 137652.65544754025
+        median_tx_value:
+          type: double
+          example: 210.933481976
+        median_tx_fee:
+          type: double
+          example: 0.09425302706400435
+        count_of_active_addresses:
+          type: integer
+          example: 639963
+        count_of_tx:
+          type: integer
+          example: 275136
+        count_of_payments:
+          type: integer
+          example: 388150
+        new_issuance:
+          type: double
+          example: 5815496.258292316
+        average_difficulty:
+          type: double
+          example: 6727225469720
+        kilobytes_added:
+          type: double
+          example: 126196.179
+        count_of_blocks_added:
+          type: int
+          example: 139
+        supply_moved_off_chain:
+          type: double
+          example: null
+    BlockchainStats:
+      type: object
+      properties:
+        transaction_volume:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        nvt:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        mean_and_median_tx_values:
+          $ref: "#/components/schemas/ArrayOfDateMeanMedian"
+        number_of_active_addresses:
+          $ref: "#/components/schemas/ArrayOfDateInt"
+        number_of_tx:
+          $ref: "#/components/schemas/ArrayOfDateInt"
+        number_of_payments:
+          $ref: "#/components/schemas/ArrayOfDateInt"
+        new_issuance:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        fees:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        average_difficulty:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        kilobytes_added:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+        number_of_blocks_added:
+          $ref: "#/components/schemas/ArrayOfDateInt"
+        supply_moved_off_chain:
+          $ref: "#/components/schemas/ArrayOfDateDouble"
+    ArrayOfDateDouble:
+      type: array
+      items:
+        properties:
+          date:
+            type: string
+            format: date-time
+          val:
+            type: double
+            example: 123.001
+    ArrayOfDateInt:
+      type: array
+      items:
+        properties:
+          date:
+            type: string
+            format: date-time
+          val:
+            type: integer
+            example: 123
+    ArrayOfDateMeanMedian:
+      type: array
+      items:
+        properties:
+          date:
+            type: string
+            format: date-time
+          mean:
+            type: double
+            example: 123.001
+          median:
+            type: double
+            example: 123.001
+    AssetWithMetricsAndProfile:
+      type: object
+      properties:
+        <<: *asset
+        profile:
+          $ref: "#/components/schemas/AssetProfile"
+        metrics:
+          $ref: "#/components/schemas/AssetMetrics"
+    AssetWithMetricsAndProfileV2:
+      type: object
+      properties:
+        <<: *asset
+        profile:
+          $ref: "#/components/schemas/AssetProfileV2"
+        metrics:
+          $ref: "#/components/schemas/AssetMetrics"
+    AssetProfileV2:
+      type: object
+      properties:
+        profile:
+          type: object
+          properties:
+            general:
+              type: object
+              description: General taxonomy (category & sector) and description of the asset, its background, issuing organization, milestones and regulatory details.
+              properties:
+                overview:
+                  type: object
+                  properties:
+                    is_verified:
+                      type: boolean
+                      description: Indicates if the asset is part of the Messari Registry, an open source disclosures database aiming to become a central repository for project information that can be freely accessed industry-wide
+                      example: false
+                    tagline:
+                      type: string
+                      description: One-Sentence summary of the asset's purpose.
+                      example: A decentralized computing platform
+                    category:
+                      type: string
+                      description: Indicates the primary use-case or application of a cryptoasset network
+                      example: Infrastructure
+                    sector:
+                      type: string
+                      description: Indicate the specific solution(s) provided by a cryptoasset network.
+                      example: Smart Contracts Platforms
+                    tags:
+                      type: string
+                      description: Tags allow to group cryptoassets that share some similarities that fall outside of the general classification model. These can be features, specifications, fun facts, memes etc.
+                      example: Privacy
+                    project_details:
+                      type: string
+                      description: Brief description of a few lines summarizing the project.
+                      example: Ethereum is a distributed blockchain computing platform for smart contracts and decentralized applications.
+                    official_links:
+                      $ref: "#/components/schemas/Link"
+                background:
+                  type: object
+                  properties:
+                    background_details:
+                      type: string
+                      description: A longer description of one to two paragraphs summarizing the project, its goals, and its technology.
+                      example: "Ethereum is a blockchain designed to be a distributed computing platform for executing smart contracts and building decentralized applications (dapps). The Ethereum white paper was published in late 2013, and the project was formally announced at a Bitcoin conference in early 2014. Vitalik Butern, co-creator of Ethereum, started designing the protocol due to some limitations in Bitcoin’s protocol (i.e., Turing completeness) . Ethereum officially launched in mid-2015 with the informally stated goal of supporting “unstoppable applications.”The current Ethereum blockchain (ETH) split off of the original Ethereum Classic blockchain (ETC) in a hard fork on July 20, 2016 at block height 920000. The Ethereum fork was initiated after a bug in Ethereum’s Decentralized Autonomous Organization (DAO) smart contract that was exploited to siphon off 3,600,000 ethers.The Ethereum Foundation, created in 2014, is an Ethereum-focused non-profit organization dedicated to Ethereum’s research, core protocol development, and ecosystem growth. The Ethereum Foundation oversaw the original ether crowdsale in July 2014. "
+                    issuing_organizations:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/OrganizationLite"
+                      description: Organization(s) responsible(s) for the initial issuance of the asset
+                roadmap:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                        description: Name of the milstone.
+                        example: Serenity Phase 0
+                      date:
+                        type: date-time
+                        description: Past or expected date of completion of the milestone.
+                        example: 2020-01-03T00:00:00Z
+                      type:
+                        type: string
+                        description: Type of Milestone
+                        example: Protocol Upgrade
+                      details:
+                        type: string
+                        description: Details of the changes implied by the completion of this milestone.
+                        example: Phase 0 of the transition to PoS Casper
+                regulation:
+                  type: object
+                  properties:
+                    regulatory_details:
+                      type: string
+                      description: Details on the past regulatory events concerning the asset.
+                      example: The Securities and Exchange Commission announced in September 2019 that it settled charges against blockchain technology company Block.one for conducting an unregistered initial coin offering of digital tokens (ICO) that raised the equivalent of several billion dollars over approximately one year.  The company agreed to settle the charges by paying a $24 million civil penalty.
+                    sfar_score:
+                      type: float
+                      description: The score reflects an independent analysis by the Crypto Rating Council, LLC and is intended as a tool to help members evaluate and weigh factors that may be relevant to the potential classification of a digital asset under federal securities laws.
+                      example: 4
+                    sfar_summary:
+                      type: string
+                      description: Analysis underpinning each score based on a limited review of factual information publicly available or otherwise made available to the Crypto Rating Council.
+                      example: 1. Current functionality of the platform; 2. Absence of investment-like language or marketing; 3. Decentralized development and usage
+            contributors:
+              type: object
+              description: People or organizations working on the development of the project.
+              properties:
+                individuals:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PersonLite"
+                organizations:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/OrganizationLite"
+            advisors:
+              type: object
+              description: People or organizations advising the project.
+              properties:
+                individuals:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PersonLite"
+                organizations:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/OrganizationLite"
+            investors:
+              type: object
+              description: Investors (organizations or business angels) that have invested into the asset.
+              properties:
+                individuals:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PersonLite"
+                organizations:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/OrganizationLite"
+            ecosystem:
+              type: object
+              description: Third-party projects (assets or organizations) that are part of the ecosystem of the asset (wallets, scalability solutions ...)
+              properties:
+                assets:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AssetLite"
+                organizations:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/OrganizationLite"
+            economics:
+              type: object
+              description: Details about the token economics, the launch, the fundraising rounds, the supply dynamics, the native treasury and the consensus mechanism of the asset.
+              properties:
+                token:
+                  type: object
+                  properties:
+                    token_name:
+                      type: string
+                      example: DAI
+                    token_type:
+                      type: string
+                      description: Indicates the standard or network on which a the asset operates.
+                      example: ERC-20
+                    block_explorers:
+                      description: Main block explorers or token trackers allowing to visualize the ledger history, including transactions, blocks and addresses.
+                      $ref: "#/components/schemas/Link"
+                    multitoken:
+                      type: array
+                      description: Indicates if other token(s) used by the protocol to operate.
+                      items:
+                        $ref: "#/components/schemas/AssetLite"
+                    token_usage:
+                      type: string
+                      description: Indicates how the token can be used in its network.
+                      example: Payments
+                    token_usage_details_and_wallets:
+                      description: Qualitative outline of the token role in the network as well as the ways to store the token.
+                      type: string
+                      example: Ethereum network peers pay fees priced in gas to include transactions in blocks. Gas is priced in ethers, but Ethereum makes the distinction between ethers and gas to separate the exchange rate of the native currency and the network's computational cost. Gas fees increase and decrease as demand for block space increases and decreases.
+                launch:
+                  type: object
+                  properties:
+                    general:
+                      type: object
+                      properties:
+                        launch_style:
+                          type: string
+                          description: Classification of how the initial supply was created and distributed.
+                          example: Fair Launch
+                        launch_details:
+                          type: string
+                          description: Brief description of the initial supply creation and distribution
+                          example: Ethereum’s original token distribution event, managed by the Ethereum Foundation, sold roughly 60 million ethers (80% of the initial 72 million ether supply) to the public. The 2015 crowdsale initially priced 2000 ethers at 1 bitcoin. The remaining 12 million (20% of the initial supply) were allocated to the Foundation and early Ethereum contributors. Of the ethers sent to the Foundation, 3 million were allocated to a long-term endowment, 6 million were distributed among 85 developers who contributed prior to the crowdsale, and 3 million were designed as a “developer purchase program” that gave Ethereum developers the rights to purchase ethers at crowdsale prices.
+                    fundraising:
+                      type: object
+                      description: Key information on the asset fundraising rounds, including token sales, if any.
+                      properties:
+                        sales_rounds:
+                          $ref: "#/components/schemas/FundraisingRound"
+                        sales_documents:
+                          $ref: "#/components/schemas/Link"
+                        sales_treasury_accounts:
+                          $ref: "#/components/schemas/Treasury"
+                        treasury_policies:
+                          $ref: "#/components/schemas/Link"
+                        projected_use_of_sales_proceeds:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              category:
+                                type: string
+                                example: Marketing
+                              amount_in_percentage:
+                                type: float
+                                example: 75.8
+                    initial_distribution:
+                      type: object
+                      description: Quantitative data on the initial supply creation and distribution.
+                      properties:
+                        initial_supply:
+                          type: float
+                          example: 72000000.53
+                        initial_supply_repartition:
+                          type: object
+                          properties:
+                            allocated_to_investors_percentage:
+                              type: float
+                              example: 83.47
+                            allocated_to_organization_or_founders_percentage:
+                              type: float
+                              example: 16.53
+                            allocated_to_premined_rewards_or_airdrops_percentage:
+                              type: float
+                              example: 0
+                        token_distribution_date:
+                          type: date-time
+                          example: 2015-07-30T00:00:00Z
+                        genesis_block_date:
+                          type: date_time
+                          example: 2015-07-30T00:00:00Z
+                consensus_and_emission:
+                  type: object
+                  properties:
+                    supply:
+                      type: object
+                      properties:
+                        supply_curve_details:
+                          type: string
+                          description: In-depth details about the asset's Liquid Supply dynamics.
+                          example: New ethers are generated via block rewards, initially set a 5 ethers per block. Constantinople and St. Petersburg, two later forks, reduce block rewards from 3 to 2 ethers.
+                        general_emission_type:
+                          type: string
+                          description: This defines the general monetary policy ruling the issuance of new coins for a given cryptoasset. Therefore it's an indication of the future evolution of the Outstanding Supply (supply visible on-chain) for a given cryptoasset.
+                          example: Deflationary
+                        precise_emission_type:
+                          type: string
+                          description: This further defines the monetary policy ruling the issuance of new coins for a given cryptoasset. It gives a more precise picture of the future evolution of the Outstanding Supply for a given cryptoasset (supply visible on-Chain).
+                          example: Decreasing Inflation rate
+                        is_capped_supply:
+                          type: boolean
+                          description: Is the supply capped (maximum supply defined) or uncapped (no maximum supply).
+                          example: false
+                        max_supply:
+                          type: float
+                          description: If the supply is capped, it indicates the maximum supply that will ever exist on-chain based on the current specifications.
+                          example: 21000000
+                    consensus:
+                      type: object
+                      properties:
+                        consensus_details:
+                          description: Details on the consensus mechanism such as difficulty adjustment mechanism for PoW assets, validation and delegation requirements for PoS & DPoS assets etc.
+                          type: string
+                          example: The consensus model in Tezos is defined as Liquid Proof of Stake (LPoS). LPoS enables stakeholders even with the smallest sum of holdings to participate in the baking & governance process, by delegating the coins to a Delegation Service of their choice.
+                        general_consensus_mechanism:
+                          description: General indication of the consensus type used by a given cryptoasset.
+                          type: string
+                          example: Proof-of-Stake
+                        precise_consensus_mechanism:
+                          description: More detailed information on the precise consensus algorithm of each asset
+                          type: string
+                          example: Liquid Proof-of-Stake
+                        targeted_block_time:
+                          description: Targeted time interval between each block as defined by the protocol specifications.
+                          type: float
+                          example: 15
+                        block_reward:
+                          description: Rewards in native token granted by the protocol to produce a block.
+                          type: float
+                          example: 2
+                        mining_algorithm:
+                          description: This is the mining algorithm used by a given Proof-of-Work cryptoasset
+                          type: string
+                          example: Cuckoo Cycle
+                        next_halving_date:
+                          description: Expected date for the next halving based on Messari proprietary supply data.
+                          type: date-time
+                          example: 2020-03-01T00:00:00Z
+                        is_victim_of_51_percent_attack:
+                          description: Details on previous 51% attacks, in the case the network experienced such an attack in the past.
+                          type: boolean
+                          example: true
+                native_treasury:
+                  type: object
+                  properties:
+                    accounts:
+                      $ref: "#/components/schemas/NativeTreasury"
+                    treasury_usage_details:
+                      description: Details about the issuing organization's plan to distribue its remaining native token treasury.
+                      type: string
+                      example: The native treasury will be used to distribute rewards to developers on the platform.
+            technology:
+              type: object
+              description: Details on the technology, client repositories, developer tools, past audits, as well as known exploits and vulnerabilities experienced by the protocol.
+              properties:
+                overview:
+                  type: object
+                  properties:
+                    technology_details:
+                      description: Overview of the technological specifications and properties of the protocol.
+                      type: string
+                      example: The Ethereum Virtual Machine (EVM) is an environment for executing smart contracts on the platform. Ethers are the native currency of the Ethereum blockchain. The EVM is a core component of Ethereum that allows developing smart contract-powered applications within the distributed network’s consensus.
+                    client_repositories:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            example: Example
+                          link:
+                            type: string
+                            example: example.com
+                          license_type:
+                            type: string
+                            example: MIT
+                security:
+                  type: object
+                  properties:
+                    audits:
+                      description: List of past technological audits realized by professional auditors.
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          title:
+                            type: string
+                            example: Token Sale Contract Audit
+                          date:
+                            type: date-time
+                            example: 2019-03-01T00:00:00Z
+                          type:
+                            type: string
+                            example: Smart Contracts
+                          details:
+                            type: string
+                            example: The token sales smart contracts were audited prior to the sale.
+                    known_exploits_and_vulnerabilities:
+                      description: List of known security exploits and vulnerabilities experiences by the project.
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          title:
+                            type: string
+                            example: Counterfeit vulnerability
+                          date:
+                            type: date-time
+                            example: 2017-10-25T00:00:00Z
+                          type:
+                            type: string
+                            example: Vulnerability
+                          details:
+                            type: string
+                            example: A counterfeiting vulnerability was discovered by a cryptographer. It was not reported publicly at the time in order to protect against it being exploited prior to its remediation, and to provide information and remediated code to other projects that were also vulnerable
+            governance:
+              type: object
+              description: Details on the off-chain and on-chain governance specifications of the asset, as well as the grant programs led by the issuing organization(s).
+              properties:
+                governance_details:
+                  type: string
+                  example: There is no mechanism in Ethereum to upgrade or otherwise change the protocol without a hard fork. Every time a proposal makes it through the EIP process, becomes finalized, and gets implemented in the various clients, it must subsequently be scheduled for inclusion in an upcoming hard fork. The Ethereum core developers have historically scheduled periodic hard forks to include various protocol upgrades and improvements (Byzantine Hard Fork, Constantinople hard fork).
+                onchain_governance:
+                  description: Details on the on-chain governance model, if any.
+                  type: object
+                  properties:
+                    onchain_governance_type:
+                      description: This classifies the mechanisms through which governance happens on-chain for a given cryptoasset. This classification was inspired by Odysseas Sclavounis and Nic Carter's Overview of Governance in Blockchains.
+                      type: string
+                      example: Delegative on-chain vote
+                    onchain_governance_details:
+                      type: string
+                      example: Miners have the ability to modify the per-block gas limit in either direction by a factor of 1/1024 per block produced. In December 2017, following a sudden increase in network utilization, miners coordinated to move the gas limit from 6.7M gas per block to 8M gas per block without a hard fork and without intervention on the part of the core developer, All Core Devs, or any of the other governance mechanisms.
+                    is_treasury_decentralized:
+                      description: This indicates if the cryptoasset incorporates a decentralized treasury where a group of token holders can allocate funds through On-Chain Governance.
+                      type: boolean
+                      example: false
+                grants:
+                  description: Details on the Grant Programs, if any.
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      funding_organizations:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OrganizationLite"
+                      grant_program_details:
+                        type: string
+                        example: The Ethereum Foundation invites applications for funding for building a useful product or experience. It provides Ethereum teams with more runway, advice and resources to focus simply on building useful products and experiences. Grantees receive Non-dilutive funding, Technical advisory, Connection to more users and a Platform to share their work. So far the Ethereum Foundation led 5 rounds of grants.
+
+    AssetProfile:
+      type: object
+      properties:
+        <<: *asset
+        tagline:
+          type: string
+          example: Peer-to-peer electronic cash
+        overview:
+          type: string
+          example: Bitcoin is the first successfully distributed consensus-based, censorship-resistant, peer-to-peer payment settlement network with a provably scarce, programmable, native currency.
+        background:
+          type: string
+          example: Bitcoin borrows from nearly three decades of research by academics, cypherpunk practitioners, and hobbyists who tried to create protocols for decentralized peer-to-peer payment networks with native currencies. Some of the most prominent projects that preceded Bitcoin include Digicash, b-money, Hashcash, and e-gold. Bitcoin is often associated with Austrian economic theories, anarcho-capitalist principles, and general libertarian politicking by virtue of the exclusive developer community to whom Nakamoto first released their white paper, certain protocol design characteristics, and the central tendency of political affiliations among early Bitcoin investors. A now-famous The Times headline included by Nakamoto in the genesis block’s coinbase signals Bitcoin’s wider potential utility, namely as a tool for anyone seeking alternatives to legacy financial services and sovereign monies.
+        technology:
+          type: string
+          example: \"Bitcoin\" is a label used for a protocol and a currency. Bitcoin, the protocol, is a distributed, time-stamped ledger of unspent transaction output (UTXO) transfers stored in an append-only chain of 1MB data blocks. A network of mining and economic nodes maintains this blockchain by validating, propagating, and fighting to include mempool transactions in new blocks. Economic nodes (aka \"full nodes\") receive transactions from other network participants, validate them against network consensus rules and double-spend vectors, and propagate the transactions to other full nodes that also validate and propagate. Valid transactions are sent to the network's mempool waiting for mining nodes to confirm them via inclusion in the next block.\n\nMining nodes work to empty the mempool usually in a highest-to-lowest fee order by picking transactions to include in the next block and racing against each other to generate a hash less than the target number set by Bitcoin's difficulty adjustment algorithm. Proof of work (PoW) is the name for this cryptographic construct that incentives honesty among network participants and allows other mining nodes to costlessly verify the solved hash. Mining difficulty regularly adjusts to maintain Bitcoin's average ten-minute block schedule. Mining nodes add new blocks to whatever chain has the largest accumulated proof of work maintained by a network of economic nodes with downloaded copes if the same chain. Mining blocks is the only way to mint new bitcoins. \n\nBitcoin, the currency, is bits of data usable outside the limitations of the protocol a la scaling solutions like Lightning Network payment channels. A hard supply cap of 21 million bitcoins was introduced in Nakamoto's original source code and reinforced by Pieter Wuille's BIP42, which patched a small supply cap bug.
+        token_distribution:
+          type: object
+          properties:
+            description:
+              type: string
+              example: On January 3, 2009, two months after publishing their white paper, Satoshi created the first bitcoins by mining the genesis block, but the block reward (50 BTC) is unspendable due to the original client's block database and transaction database configuration. Block rewards (initially 50 BTC + transaction fees) are claimed every 10 minutes, on average. Block rewards are halved every 210,000 blocks (approximately 4 years).
+            sale_start:
+              type: string
+              format: date
+              example: 2009-01-03
+            sale_end:
+              type: string
+              format: date
+              example: 2009-01-03
+            initial_distribution:
+              type: number
+              format: double
+              example: 50
+            current_supply:
+              type: number
+              format: double
+              example: 17350000
+            max_supply:
+              type: number
+              format: double
+              example: 21000000
+        organizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        people:
+          type: array
+          items:
+            type: object
+            properties:
+              founding_team:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+              contributors:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+              investors:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+              advisors:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+        relevant_resources:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: Whitepaper
+              url:
+                type: string
+                example: https://nakamotoinstitute.org/bitcoin/
+    Organization:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Hypothetical Bitcoin Foundation
+        founded_date:
+          type: string
+          format: datetime
+          example: 2014-07-06T00:00:00Z
+        governance:
+          type: string
+          example: null
+        legal_structure:
+          type: string
+          example: Foundation
+        jurisdiction:
+          type: string
+          format: datetime
+          example: Switzerland, Europe
+        org_charter:
+          type: string
+          example: null
+        description:
+          type: string
+          example: null
+        people_count_estimate:
+          type: string
+          example: "100"
+    Person:
+      type: object
+      properties:
+        first_name:
+          type: string
+          example: Satoshi
+        last_name:
+          type: string
+          example: Nakamoto
+        description:
+          type: string
+          example: Person(s) who created Bitcoin, whose identity remains unknown despite a plethora of demonstrably false claims to the contrary.
+        github:
+          type: string
+          example: null
+        linkedin:
+          type: string
+          example: null
+        medium:
+          type: string
+          example: null
+        twitter:
+          type: string
+          example: null
+    AssetRoiStats:
+      type: object
+      properties:
+        percent_change_last_1_week:
+          type: number
+          format: double
+          example: -0.28963853172695914
+        percent_change_last_1_month:
+          type: number
+          format: double
+          example: -0.41911389139537464
+        percent_change_last_3_months:
+          type: number
+          format: double
+          example: -0.4671650746253208
+        percent_change_last_1_year:
+          type: number
+          format: double
+          example: -0.5908177605434218
+    AssetMisc:
+      type: object
+      properties:
+        asset_age_days:
+          type: integer
+          example: 3613
+        vladimir_club_cost:
+          type: number
+          format: double
+          example: 7862341.302686478
+        categories:
+          type: array
+          items:
+            type: string
+            example:
+              - Currency
+        sector:
+          type: array
+          items:
+            type: string
+            example:
+              - Currency
+    AssetMetrics:
+      type: object
+      properties:
+        <<: *asset
+        market_data:
+          $ref: "#/components/schemas/MarketData"
+        supply:
+          $ref: "#/components/schemas/AssetSupply"
+        blockchain_stats_24_hours:
+          $ref: "#/components/schemas/BlockchainStats24h"
+        all_time_high:
+          $ref: "#/components/schemas/AssetAllTimeHigh"
+        developer_activity:
+          $ref: "#/components/schemas/AssetDeveloperActivity"
+        roi_data:
+          $ref: "#/components/schemas/AssetRoiStats"
+        misc_data:
+          $ref: "#/components/schemas/AssetMisc"
+    AssetMetricsMarketData:
+      type: object
+      properties:
+        <<: *asset
+        market_data:
+          $ref: "#/components/schemas/MarketData"
+    AssetLite:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 6104fc11-c09f-467b-bb70-f5017483f864
+        name:
+          type: string
+          example: Loom Network
+    FundraisingRound:
+      type: array
+      items:
+        type: object
+        properties:
+          title:
+            type: string
+            example: Crowdsale
+          start_date:
+            type: date-time
+            example: 2016-07-22T00:00:00Z
+          type:
+            type: string
+            example: Public Sale
+          details:
+            type: string
+            example: The crowdsale was completed in less than 6 hours with over 12,000 participants.
+          end_date:
+            type: date-time
+            example: 2016-07-23T00:00:00Z
+          native_tokens_allocated:
+            type: float
+            example: 5000000
+          asset_collected:
+            type: string
+            example: ETH
+          price_per_token_in_asset:
+            type: float
+            example: 0.0005
+          equivalent_price_per_token_in_USD:
+            type: float
+            example: 1.05
+          amount_collected_in_asset:
+            type: float
+            example: 2500
+          amount_collected_in_USD:
+            type: float
+            example: 5250000
+          is_kyc_required:
+            type: boolean
+            example: true
+          restricted_jurisdictions:
+            type: array
+            items:
+              type: string
+              example: France
+    Link:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            example: Example
+          link:
+            type: string
+            example: example.com
+    OrganizationLite:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: ethereum-foundation
+        name:
+          type: string
+          example: Ethereum Foundation
+        logo:
+          type: string
+          example: https://messari.s3.amazonaws.com/images/agora-images/DOnqq1OM_400x400.jpg
+        description:
+          type: string
+          example: Ethereum is a decentralized platform that runs smart contracts, applications that run exactly as programmed without any possibility of downtime, censorship, fraud or third-party interference.
+    PersonLite:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: anthony-di-iorio
+        first_name:
+          type: string
+          example: Vitalik
+        last_name:
+          type: string
+          example: Buterin
+        title:
+          type: string
+          example: Co-Founder of Ethereum
+        description:
+          type: string
+          example: Vitalik is the creator of Ethereum. He first discovered blockchain and cryptocurrency technologies through Bitcoin in 2011, and was immediately excited by the technology and its potential. He cofounded Bitcoin Magazine in September 2011, and after two and a half years looking at what the existing blockchain technology and applications had to offer, wrote the Ethereum white paper in November 2013. He now leads Ethereum's research team, working on future versions of the Ethereum protocol.
+        avatar_url:
+          type: string
+          example: https://pbs.twimg.com/profile_images/977496875887558661/L86xyLF4_400x400.jpg
+    NativeTreasury:
+      type: array
+      items:
+        type: object
+        properties:
+          account_type:
+            type: string
+            example: Crowdsale Wallet
+          addresses:
+            $ref: "#/components/schemas/Link"
+    Treasury:
+      type: array
+      items:
+        type: object
+        properties:
+          account_type:
+            type: string
+            example: Crowdsale Wallet
+          asset_held:
+            $ref: "#/components/schemas/AssetLite"
+          addresses:
+            $ref: "#/components/schemas/Link"
+          security:
+            type: string
+            example: Multisig wallet
+    ListAssetMetricsResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/ApiStatus"
+        data:
+          type: array
+          items:
+            type: string
+    AssetTimeseriesParameters:
+      type: object
+      properties:
+        assetKey:
+          type: string
+          example: "btc"
+        assetID:
+          type: string
+          example: "ee9da78b-b500-4be1-88c3-9d412cfe9f48"
+        start:
+          type: string
+        end:
+          type: string
+        interval:
+          type: string
+          example: "1d"
+        order:
+          type: string
+          example: "asc"
+        format:
+          type: string
+          example: "json"
+    MarketTimeseriesParameters:
+      type: object
+      properties:
+        marketKey:
+          type: string
+          example: "binance-btc-usdt"
+        marketID:
+          type: string
+          example: "ee9da78b-b500-4be1-88c3-9d412cfe9f48"
+        start:
+          type: string
+        end:
+          type: string
+        interval:
+          type: string
+          example: "1d"
+        order:
+          type: string
+          example: "asc"
+        format:
+          type: string
+          example: "json"
+    TimeseriesSchema:
+      type: object
+      properties:
+        metric_id:
+          type: string
+          example: "price"
+        description:
+          type: string
+          example: "Market price represents the open, high, low, close and volume of the asset traded in the specified interval"
+        category:
+          type: string
+          example: "Market Data"
+        values_schema:
+          $ref: "#/components/schemas/TimeseriesValuesSchema"
+        minimum_interval:
+          type: string
+          example: "5m"
+        first_available:
+          type: date-time
+          example: 2016-07-23T00:00:00Z
+        last_available:
+          type: date-time
+          example: 2018-01-01T00:00:00Z
+    TimeseriesValuesSchema:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: The name of the column
+            example: open
+          description:
+            type: string
+            description: A description of the column.
+            example: The price of the asset at the beginning of each interval
+    TimeseriesValues:
+      type: array
+      items:
+        type: array
+        items:
+          type: float
+    GetAssetTimeseriesResponse:
+      type: object
+      properties:
+        parameters:
+          $ref: "#/components/schemas/AssetTimeseriesParameters"
+        schema:
+          $ref: "#/components/schemas/TimeseriesSchema"
+        values:
+          $ref: "#/components/schemas/TimeseriesValues"
+    GetMarketTimeseriesResponse:
+      type: object
+      properties:
+        parameters:
+          $ref: "#/components/schemas/MarketTimeseriesParameters"
+        schema:
+          $ref: "#/components/schemas/TimeseriesSchema"
+        values:
+          $ref: "#/components/schemas/TimeseriesValues"
+    Reference:
+      type: object
+      properties:
+        name:
+          type: string
+          example: KPMG
+        url:
+          type: string
+          example: https://assets.kpmg.com/content/dam/kpmg/us/pdf/2018/11/institutionalization-cryptoassets.pdf
