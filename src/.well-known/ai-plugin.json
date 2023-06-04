@@ -1,0 +1,18 @@
+{
+    "schema_version": "v1",
+    "name_for_human": "Messari Plugin",
+    "name_for_model": "messari",
+    "description_for_human": "Plugin for interfacing with Messari's API",
+    "description_for_model": "Plugin for interfacing with Messari's API",
+    "auth": {
+        "type": "none"
+    },
+    "api": {
+        "type": "openapi",
+        "url": "http://localhost:3000/openapi.yaml",
+        "is_user_authenticated": false
+    },
+    "logo_url": "http://localhost:3000/logo.png",
+    "contact_email": "support@example.com",
+    "legal_info_url": "http://localhost:3000/legal"
+}

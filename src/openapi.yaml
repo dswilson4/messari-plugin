@@ -1,0 +1,148 @@
+openapi: 3.0.1
+info:
+  title: Messari Time Series Data API
+  description: An API that fetches timeseries data for a specific asset from the Messari API.
+  version: "v1"
+servers:
+  - url: http://localhost:3000
+paths:
+  /timeseries:
+    get:
+      operationId: getTimeSeriesData
+      summary: Get the timeseries data
+      parameters:
+        - in: query
+          name: assetKey
+          schema:
+            type: string
+          required: true
+          description: The key of the asset.
+        - in: query
+          name: start
+          schema:
+            type: string
+            format: date-time
+          required: true
+          description: The start date-time of the timeseries.
+        - in: query
+          name: end
+          schema:
+            type: string
+            format: date-time
+          required: true
+          description: The end date-time of the timeseries.
+        - in: query
+          name: interval
+          schema:
+            type: string
+            enum: ["1m", "5m", "15m", "30m", "1h", "1d", "1w"]
+          required: true
+          description: The interval of the timeseries.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeSeriesResponse"
+        "400":
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    TimeSeriesResponse:
+      type: object
+      properties:
+        status:
+          type: object
+          properties:
+            elapsed:
+              type: integer
+            timestamp:
+              type: string
+              format: date-time
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            serial_id:
+              type: integer
+            symbol:
+              type: string
+            name:
+              type: string
+            slug:
+              type: string
+            contract_addresses:
+              type: array
+              items:
+                type: object
+                properties:
+                  platform:
+                    type: string
+                  contract_address:
+                    type: string
+            _internal_temp_agora_id:
+              type: string
+            parameters:
+              type: object
+              properties:
+                asset_key:
+                  type: string
+                asset_id:
+                  type: string
+                start:
+                  type: string
+                end:
+                  type: string
+                interval:
+                  type: string
+                order:
+                  type: string
+                format:
+                  type: string
+                timestamp_format:
+                  type: string
+                columns:
+                  type: array
+                  items:
+                    type: string
+            schema:
+              type: object
+              properties:
+                metric_id:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                values_schema:
+                  type: object
+                minimum_interval:
+                  type: string
+                source_attribution:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      url:
+                        type: string
+            values:
+              type: array
+              items:
+                type: array
+                items:
+                  type: number
